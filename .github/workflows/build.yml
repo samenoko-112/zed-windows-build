@@ -1,5 +1,7 @@
 name: Build for Windows
 on:
+  schedule:
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
@@ -7,6 +9,26 @@ jobs:
     runs-on: windows-latest
     steps:
       - run: git config --system core.longpaths true
+      - name: Get latest release tag
+        id: get_tag
+        shell: bash
+        run: |
+          LATEST_TAG=$(gh release list --repo zed-industries/zed --limit 1 --json tagName --jq '.[0].tagName')
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_ENV
+          echo "Latest tag: $LATEST_TAG"
+
+          if [ -f .last_built_tag ]; then
+            PREV_TAG=$(cat .last_built_tag)
+            echo "Previous tag: $PREV_TAG"
+            if [ "$LATEST_TAG" = "$PREV_TAG" ]; then
+              echo "No new release. Skipping build."
+              exit 0
+            fi
+          fi
+
+          echo "$LATEST_TAG" > .last_built_tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: checkout
         uses: actions/checkout@v5
       - name: setup Rust
@@ -15,7 +37,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - name: Clone Repo
         run: |
-          git clone https://github.com/zed-industries/zed.git --depth 1
+          git clone --branch %LATEST_TAG% https://github.com/zed-industries/zed.git --depth 1
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -26,5 +48,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zed-windows
-          path: zed/target/x86_64-pc-windows-msvc/release/zed.exe
+          name: zed-windows-${{ env.latest_tag }}
+          path: zed/target/release/zed.exe
