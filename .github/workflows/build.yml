@@ -55,7 +55,7 @@ jobs:
       - name: install NSIS
         run: choco install nsis -y
       - name: make Installer
-        shell: cmd
+        shell: pwsh
         run: |
           mkdir release
           copy zed/target/x86_64-pc-windows-msvc/release/zed.exe release/
