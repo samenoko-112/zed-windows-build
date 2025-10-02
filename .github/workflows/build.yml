@@ -5,10 +5,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-zed:
     runs-on: windows-latest
     steps:
       - run: git config --system core.longpaths true
+      - name: Restore last built tag
+        id: cache-tag
+        uses: actions/cache@v4
+        with:
+          path: .last_built_tag
+          key: last-built-tag
       - name: Get latest release tag
         id: get_tag
         shell: bash
@@ -37,7 +43,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
       - name: Clone Repo
         run: |
-          git clone --branch %LATEST_TAG% https://github.com/zed-industries/zed.git --depth 1
+          git clone --branch ${{ env.latest_tag }} https://github.com/zed-industries/zed.git --depth 1
         shell: cmd
       - name: Cache
         uses: Swatinem/rust-cache@v2
@@ -46,8 +52,39 @@ jobs:
       - name: Build for Windows
         working-directory: ./zed
         run: cargo build --release --target x86_64-pc-windows-msvc
+      - name: install NSIS
+        run: choco install nsis -y
+      - name: make Installer
+        shell: cmd
+        run: |
+          mkdir release
+          copy zed/target/x86_64-pc-windows-msvc/release/zed.exe release/
+          makensis.exe -DVERSION="${{ env.latest_tag }}" installer.nsi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zed-windows-${{ env.latest_tag }}
-          path: zed/target/release/zed.exe
+          path: |
+            release/zed.exe
+            release/ZedSetup-${{ env.latest_tag }}.exe
+  release:
+    needs: build-zed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: zed-windows-${{ env.latest_tag }}
+          path: .
+      - name: 🏷️ Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.latest_tag }}
+          name: Zed ${{ env.latest_tag }}
+          draft: true
+          prerelease: false
+          files: |
+            ./release/zed.exe
+            ./release/ZedSetup-${{ env.latest_tag }}.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
