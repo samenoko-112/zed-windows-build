@@ -13,7 +13,7 @@ jobs:
         id: get_tag
         shell: bash
         run: |
-          LATEST_TAG=$(gh release list --repo zed-industries/zed --limit 1 --json tagName --jq '.[0].tagName')
+          LATEST_TAG=$(gh release list --repo zed-industries/zed --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName')
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_ENV
           echo "Latest tag: $LATEST_TAG"
 
@@ -38,6 +38,7 @@ jobs:
       - name: Clone Repo
         run: |
           git clone --branch %LATEST_TAG% https://github.com/zed-industries/zed.git --depth 1
+        shell: cmd
       - name: Cache
         uses: Swatinem/rust-cache@v2
         with:
