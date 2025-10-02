@@ -76,7 +76,7 @@ jobs:
         with:
           name: zed-windows-${{ env.latest_tag }}
           path: .
-      - name: 🏷️ Create GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.latest_tag }}
@@ -88,3 +88,8 @@ jobs:
             ./release/ZedSetup-${{ env.latest_tag }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cleanup Artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: zed-windows-${{ env.latest_tag }}
+          failOnError: false
