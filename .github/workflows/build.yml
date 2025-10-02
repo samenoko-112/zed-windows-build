@@ -1,13 +1,12 @@
 name: Build for Windows
 on:
-  schedule:
-    - cron: "0 6 * * *"
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: windows-latest
     steps:
+      - run: git config --system core.longpaths true
       - name: checkout
         uses: actions/checkout@v5
       - name: setup Rust
@@ -21,10 +20,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "zed -> target"
-      - name: Setup MSVC Environment
-        shell: pwsh
-        run: |
-          & "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
       - name: Build for Windows
         working-directory: ./zed
         run: cargo build --release --target x86_64-pc-windows-msvc
