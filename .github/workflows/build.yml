@@ -6,24 +6,22 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: checkout
         uses: actions/checkout@v5
       - name: setup Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Add Windows Target
-        run: rustup target add x86_64-pc-windows-gnu
-      - name: Install mingw-w64
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+        with:
+          targets: x86_64-pc-windows-msvc
       - name: Clone Repo
         run: |
           git clone https://github.com/zed-industries/zed.git --depth 1
       - name: Build for Windows
         working-directory: ./zed
-        run: cargo build --release --target x86_64-pc-windows-gnu
+        run: cargo build --release --target x86_64-pc-windows-msvc
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zed-windows
-          path: zed/target/x86_64-pc-windows-gnu/release/zed.exe
+          path: zed/target/x86_64-pc-windows-msvc/release/zed.exe
