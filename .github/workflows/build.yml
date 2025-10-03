@@ -53,9 +53,11 @@ jobs:
         working-directory: ./zed
         run: cargo build --release --target x86_64-pc-windows-msvc
       - name: install NSIS
-        run: choco install nsis -y
+        run: |
+          choco install nsis -y
+          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\Program Files\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: make Installer
-        shell: cmd
         run: |
           mkdir release
           copy zed\target\x86_64-pc-windows-msvc\release\zed.exe release\
