@@ -58,7 +58,7 @@ jobs:
         shell: cmd
         run: |
           mkdir release
-          copy zed/target/x86_64-pc-windows-msvc/release/zed.exe release/
+          copy zed\target\x86_64-pc-windows-msvc\release\zed.exe release\
           makensis.exe -DVERSION="${{ env.latest_tag }}" installer.nsi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
