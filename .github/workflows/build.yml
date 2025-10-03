@@ -122,7 +122,7 @@ jobs:
         with:
           tag_name: ${{ needs.build-zed.outputs.latest_tag }}
           name: Zed ${{ needs.build-zed.outputs.latest_tag }}
-          draft: true
+          draft: false
           prerelease: false
           files: |
             ./release/zed.exe
