@@ -6,92 +6,133 @@ on:
 
 jobs:
   build-zed:
+    name: "🛠️ Build Zed"
     runs-on: windows-latest
+    outputs:
+      latest_tag: ${{ steps.get_tag.outputs.latest_tag }}
     steps:
+      # Enable long path support (to avoid path length issues on Windows)
       - run: git config --system core.longpaths true
+
+      # Restore the previously built tag from cache
       - name: Restore last built tag
-        id: cache-tag
-        uses: actions/cache@v4
+        id: restore-tag
+        uses: actions/cache/restore@v4
         with:
           path: .last_built_tag
           key: last-built-tag
+
+      # Fetch the latest release tag from GitHub
       - name: Get latest release tag
         id: get_tag
         shell: bash
         run: |
-          LATEST_TAG=$(gh release list --repo zed-industries/zed --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName')
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_ENV
+          LATEST_TAG=$(gh release list --repo zed-industries/zed \
+            --exclude-drafts --exclude-pre-releases --limit 1 \
+            --json tagName --jq '.[0].tagName')
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           echo "Latest tag: $LATEST_TAG"
 
           if [ -f .last_built_tag ]; then
             PREV_TAG=$(cat .last_built_tag)
             echo "Previous tag: $PREV_TAG"
             if [ "$LATEST_TAG" = "$PREV_TAG" ]; then
-              echo "No new release. Skipping build."
-              exit 0
+              echo "No new release. Exiting with code 1."
+              exit 1
             fi
           fi
 
           echo "$LATEST_TAG" > .last_built_tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: checkout
+
+      # Save the current latest tag to cache for next runs
+      - name: Save last built tag
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .last_built_tag
+          key: last-built-tag
+
+      # Checkout repository (needed for installer scripts, configs, etc.)
+      - name: Checkout
         uses: actions/checkout@v5
-      - name: setup Rust
+
+      # Setup Rust toolchain
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      # Clone Zed repo at the specific release tag
       - name: Clone Repo
         run: |
-          git clone --branch ${{ env.latest_tag }} https://github.com/zed-industries/zed.git --depth 1
+          git clone --branch ${{ steps.get_tag.outputs.latest_tag }} https://github.com/zed-industries/zed.git --depth 1
         shell: cmd
-      - name: Cache
+
+      # Enable Rust build caching
+      - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "zed -> target"
-      - name: Build for Windows
+
+      # Build Zed for Windows
+      - name: Build Zed (Windows)
         working-directory: ./zed
         run: cargo build --release --target x86_64-pc-windows-msvc
-      - name: install NSIS
+
+      # Install NSIS (needed to create Windows installer)
+      - name: Install NSIS
         run: |
           choco install nsis -y
           echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "C:\Program Files\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: make Installer
+
+      # Make the installer with NSIS
+      - name: Make Installer
         run: |
           mkdir release
           copy zed\target\x86_64-pc-windows-msvc\release\zed.exe release\
-          makensis.exe -DVERSION="${{ env.latest_tag }}" installer.nsi
-      - name: Upload artifact
+          makensis.exe -DVERSION="${{ steps.get_tag.outputs.latest_tag }}" installer.nsi
+
+      # Upload build artifacts (binary and installer)
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: zed-windows-${{ env.latest_tag }}
+          name: zed-windows-${{ steps.get_tag.outputs.latest_tag }}
           path: |
             release/zed.exe
-            release/ZedSetup-${{ env.latest_tag }}.exe
+            release/ZedSetup-${{ steps.get_tag.outputs.latest_tag }}.exe
+
   release:
+    name: "🚀 Release Zed"
     needs: build-zed
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifacts
+      # Download artifacts from previous job
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: zed-windows-${{ env.latest_tag }}
-          path: .
+          name: zed-windows-${{ needs.build-zed.outputs.latest_tag }}
+          path: ./release
+
+      # Create GitHub Release and upload artifacts
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.latest_tag }}
-          name: Zed ${{ env.latest_tag }}
+          tag_name: ${{ needs.build-zed.outputs.latest_tag }}
+          name: Zed ${{ needs.build-zed.outputs.latest_tag }}
           draft: true
           prerelease: false
           files: |
             ./release/zed.exe
-            ./release/ZedSetup-${{ env.latest_tag }}.exe
+            ./release/ZedSetup-${{ needs.build-zed.outputs.latest_tag }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cleanup artifacts to avoid storage bloat
       - name: Cleanup Artifacts
         uses: geekyeggo/delete-artifact@v5
         with:
-          name: zed-windows-${{ env.latest_tag }}
+          name: zed-windows-${{ needs.build-zed.outputs.latest_tag }}
           failOnError: false
